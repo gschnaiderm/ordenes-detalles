@@ -11,10 +11,11 @@ Documentación interactiva generada desde el código: `GET /docs` (Swagger) y `G
 | Método | Ruta | Respuestas |
 |---|---|---|
 | GET | `/health` | 200 |
-| GET | `/ordenes/{id}/detalle` | 200, 400, 404, 502 |
-| GET | `/ordenes/{id}/verificacion` | 200, 400, 404, 502 |
+| GET | `/ordenes/{id}/detalle` | 200, 404, 502 |
+| GET | `/ordenes/{id}/verificacion` | 200, 404, 502 |
 
-`id`: path, string, **obligatorio**, patrón `^ORD[0-9]+$` (ej. `ORD001`).
+`id`: path, string, **obligatorio** (ej. `ORD001`). Las órdenes existentes cumplen `^ORD[0-9]+$`;
+un `id` con otro formato (ej. `123`) responde **404** sin consultar los upstreams.
 
 ### Validaciones y tipos (resumen)
 
@@ -37,8 +38,7 @@ Documentación interactiva generada desde el código: `GET /docs` (Swagger) y `G
 
 | Caso | Código | Cuerpo |
 |---|---|---|
-| `id` con formato inválido | 400 | `{"error": "bad_request", "message": "..."}` |
-| La orden no existe (ms-ordenes devuelve 404) | 404 | `{"error": "not_found", "message": "No existe la orden ORD999."}` |
+| La orden no existe (ms-ordenes devuelve 404, o el `id` no tiene formato `ORD...`) | 404 | `{"error": "not_found", "message": "No existe la orden ORD999."}` |
 | Upstream no responde en 5 s, error de conexión, respuesta ≠ 200 o JSON fuera de contrato | 502 | `{"error": "upstream_unavailable", "message": "...", "upstream": {"service", "url", "status"?}}` |
 
 ## Decisiones de diseño
@@ -50,6 +50,8 @@ Documentación interactiva generada desde el código: `GET /docs` (Swagger) y `G
 - **Verificación al centavo**: los importes se redondean a 2 decimales antes de comparar, para evitar falsos
   negativos por coma flotante (`0.1 + 0.2 != 0.3`).
 - **Mapeo de campos**: `id → ordenId / lineaId`, `precioUnit → precioUnitario`, `fecha` (date-time) → fecha UTC `YYYY-MM-DD`.
+- Un `id` que no cumple `^ORD[0-9]+$` responde **404** (no 400): no puede existir en ms-ordenes, y se evita
+  consultar ms-lineas-orden, que respondería 400 a ese filtro.
 - Errores de validación devuelven **400** (no el 422 por defecto de FastAPI), igual que los servicios consumidos.
 
 ## Estructura

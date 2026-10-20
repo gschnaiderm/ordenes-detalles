@@ -5,6 +5,7 @@ Documentación interactiva: /docs (Swagger) y /openapi.json.
 
 import asyncio
 import logging
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Annotated
@@ -63,7 +64,7 @@ app = FastAPI(
         "devolver el detalle de una orden y verificar la consistencia de sus importes.\n\n"
         "- Cada llamada a un upstream tiene un timeout de 5 segundos.\n"
         "- Si un upstream no responde, falla (5xx) o responde fuera de contrato → **502**.\n"
-        "- `id` inválido → **400**; orden inexistente → **404**.\n"
+        "- Orden inexistente → **404**, incluso si el `id` no tiene el formato `ORD...`.\n"
         "- Si `ORDENES_URL` o `LINEAS_URL` no están definidas, ese upstream se simula en memoria "
         "con datos de ejemplo (`ORD001`–`ORD004`)."
     ),
@@ -83,15 +84,17 @@ HttpClient = Annotated[httpx.AsyncClient, Depends(get_http_client)]
 OrdenId = Annotated[
     str,
     Path(
-        description="Identificador de la orden: `ORD` seguido de dígitos.",
-        pattern=ORDEN_ID_PATTERN,
+        description=(
+            "Identificador de la orden. Las órdenes existentes tienen el formato `ORD` seguido de "
+            "dígitos; cualquier otro valor responde 404."
+        ),
+        min_length=1,
         examples=["ORD001"],
     ),
 ]
 
 ERROR_RESPONSES = {
-    400: {"model": ErrorResponse, "description": "`id` con formato inválido."},
-    404: {"model": ErrorResponse, "description": "La orden no existe."},
+    404: {"model": ErrorResponse, "description": "La orden no existe (o el `id` no tiene formato `ORD...`)."},
     502: {"model": UpstreamErrorResponse, "description": "Un microservicio consumido no respondió o falló."},
 }
 
@@ -146,6 +149,10 @@ async def upstream_handler(_: Request, exc: upstream.UpstreamError) -> JSONRespo
 
 async def obtener_orden_y_lineas(client: httpx.AsyncClient, orden_id: str) -> tuple[OrdenUpstream, list[LineaUpstream]]:
     """Consulta ambos upstreams en paralelo. La orden tiene prioridad al reportar errores."""
+    # Un id fuera del formato del contrato no puede existir en ms-ordenes: se responde 404 sin
+    # consultar los upstreams (ms-lineas-orden respondería 400 al filtro y terminaría en 502).
+    if not re.fullmatch(ORDEN_ID_PATTERN, orden_id):
+        raise OrdenNoEncontrada(orden_id)
     orden, lineas = await asyncio.gather(
         upstream.get_orden(client, orden_id),
         upstream.get_lineas(client, orden_id),

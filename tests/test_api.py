@@ -118,10 +118,14 @@ def test_verificacion_sin_errores_de_coma_flotante(client_with):
 
 
 @pytest.mark.parametrize("orden_id", ["123", "ord001", "ORD", "ORDX1"])
-def test_id_invalido_400(client_with, orden_id):
-    r = client_with(upstream_ok()).get(f"/ordenes/{orden_id}/detalle")
-    assert r.status_code == 400
-    assert r.json()["error"] == "bad_request"
+@pytest.mark.parametrize("endpoint", ["detalle", "verificacion"])
+def test_id_con_otro_formato_404_sin_consultar_upstreams(client_with, orden_id, endpoint):
+    def handler(request):
+        raise AssertionError(f"no debería consultar {request.url}")
+
+    r = client_with(handler).get(f"/ordenes/{orden_id}/{endpoint}")
+    assert r.status_code == 404
+    assert r.json() == {"error": "not_found", "message": f"No existe la orden {orden_id}."}
 
 
 def test_orden_inexistente_404(client_with):
@@ -165,11 +169,11 @@ def test_respuesta_fuera_de_contrato_502(client_with):
     assert r.json()["upstream"]["status"] == 200
 
 
-def test_openapi_documenta_400_y_502():
+def test_openapi_documenta_404_y_502():
     with TestClient(app) as c:
         responses = c.get("/openapi.json").json()["paths"]["/ordenes/{id}/detalle"]["get"]["responses"]
-    assert {"200", "400", "404", "502"} <= set(responses)
-    assert "422" not in responses
+    assert {"200", "404", "502"} <= set(responses)
+    assert "400" not in responses and "422" not in responses
 
 
 # --------------------------------------------------------------------------- upstreams simulados
