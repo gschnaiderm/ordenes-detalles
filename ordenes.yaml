@@ -1,0 +1,267 @@
+openapi: 3.0.3
+info:
+  title: Microservicio de ordenes
+  version: 1.0.0
+  description: "**Colección:** `ordenes` — Órdenes de compra. El total es la suma de los subtotales de\
+    \ sus líneas.\n\nContrato común a todos los microservicios del ejercicio.\n\n**Reglas generales**\n\
+    - El servicio es de **solo lectura** y expone siempre las mismas rutas: `GET /health`, `GET /items`\
+    \ y `GET /items/{id}`.\n- `GET /items` devuelve los elementos **ordenados por `id` ascendente**, con\
+    \ paginación `limit`/`offset`.\n  `total` es la cantidad de elementos que cumplen los filtros, sin\
+    \ considerar la paginación.\n- Los filtros se combinan con AND. Los filtros de texto comparan por\
+    \ igualdad exacta sin distinguir mayúsculas.\n- Un parámetro inválido (tipo, rango o valor fuera del\
+    \ enum) responde **400**. Un `id` inexistente responde **404**.\n- Los errores usan siempre el formato\
+    \ `{ \"error\": \"<codigo>\", \"message\": \"<detalle>\" }`.\n- Los nombres de campos del documento\
+    \ coinciden con los del JSON de la semilla (campo `id` como clave primaria).\n- Fechas en ISO 8601\
+    \ UTC (`date-time`) o `YYYY-MM-DD` (`date`).\n"
+  x-collection: ordenes
+  x-id-prefix: ORD
+servers:
+- url: http://localhost:3000
+  description: Local
+- url: https://TU-SERVICIO.onrender.com
+  description: Render (reemplazar por tu URL)
+tags:
+- name: Servicio
+  description: Estado del servicio
+- name: ordenes
+  description: Órdenes de compra. El total es la suma de los subtotales de sus líneas.
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Estado del servicio
+      tags:
+      - Servicio
+      description: Debe responder 200 si el servicio y su base de datos están operativos. `collection`
+        debe coincidir con la colección que sirve este microservicio.
+      responses:
+        '200':
+          description: Servicio operativo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /items:
+    get:
+      operationId: listItems
+      summary: Lista de ordenes
+      tags:
+      - ordenes
+      description: Devuelve una página de elementos de `ordenes` ordenados por `id`.
+      parameters:
+      - name: clienteId
+        in: query
+        required: false
+        description: Filtra por cliente.
+        schema:
+          type: string
+          pattern: ^CLI[0-9]+$
+      - name: estado
+        in: query
+        required: false
+        description: Filtra por estado.
+        schema:
+          type: string
+          enum:
+          - pendiente
+          - pagada
+          - enviada
+          - entregada
+          - cancelada
+      - name: desde
+        in: query
+        required: false
+        description: Órdenes con fecha mayor o igual a este día (UTC).
+        schema:
+          type: string
+          format: date
+      - name: hasta
+        in: query
+        required: false
+        description: Órdenes con fecha menor o igual a este día (UTC, inclusive).
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Página de resultados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /items/{id}:
+    get:
+      operationId: getItem
+      summary: Detalle de un elemento de ordenes
+      tags:
+      - ordenes
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador del elemento (por ejemplo `ORD001`).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: El elemento solicitado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Cantidad máxima de elementos a devolver.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      required: false
+      description: Cantidad de elementos a saltear.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+  responses:
+    BadRequest:
+      description: Parámetros inválidos.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: bad_request
+            message: El parámetro limit debe estar entre 1 y 100.
+    NotFound:
+      description: No existe un elemento con ese id.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: not_found
+            message: No existe ORD999.
+  schemas:
+    Item:
+      type: object
+      description: Órdenes de compra. El total es la suma de los subtotales de sus líneas.
+      required:
+      - id
+      - clienteId
+      - fecha
+      - estado
+      - total
+      - moneda
+      properties:
+        id:
+          type: string
+          pattern: ^ORD[0-9]+$
+          description: Identificador único del recurso.
+          example: ORD001
+        clienteId:
+          type: string
+          pattern: ^CLI[0-9]+$
+          description: Cliente que realizó la compra.
+          example: CLI001
+        fecha:
+          type: string
+          description: Fecha y hora de creación de la orden.
+          format: date-time
+        estado:
+          type: string
+          enum:
+          - pendiente
+          - pagada
+          - enviada
+          - entregada
+          - cancelada
+          description: Estado de la orden.
+        total:
+          type: number
+          description: Importe total de la orden.
+          minimum: 0
+          example: 450000
+        moneda:
+          type: string
+          enum:
+          - ARS
+          description: Moneda de los importes.
+      example:
+        id: ORD001
+        clienteId: CLI001
+        fecha: '2026-08-10T14:22:00Z'
+        estado: entregada
+        total: 450000
+        moneda: ARS
+    ItemList:
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        total:
+          type: integer
+          minimum: 0
+          description: Cantidad total de elementos que cumplen los filtros.
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+    Health:
+      type: object
+      required:
+      - status
+      - service
+      - collection
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+        service:
+          type: string
+          description: Nombre del servicio (libre; por ejemplo el del grupo).
+          example: grupo-03-ordenes
+        collection:
+          type: string
+          enum:
+          - ordenes
+        version:
+          type: string
+          example: 1.0.0
+    Error:
+      type: object
+      required:
+      - error
+      - message
+      properties:
+        error:
+          type: string
+          enum:
+          - bad_request
+          - not_found
+        message:
+          type: string

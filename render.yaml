@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ms-ordenes-detalle
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: SERVICE_NAME
+        value: ms-ordenes-detalle
+      - key: ORDENES_URL
+        sync: false   # se carga en Render; si queda vacía se usa el mock
+      - key: LINEAS_URL
+        sync: false
+      - key: UPSTREAM_TIMEOUT
+        value: "5"

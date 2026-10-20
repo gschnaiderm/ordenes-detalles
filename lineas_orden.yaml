@@ -1,0 +1,244 @@
+openapi: 3.0.3
+info:
+  title: Microservicio de lineas_orden
+  version: 1.0.0
+  description: "**Colección:** `lineas_orden` — Líneas (renglones) de cada orden.\n\nContrato común a\
+    \ todos los microservicios del ejercicio.\n\n**Reglas generales**\n- El servicio es de **solo lectura**\
+    \ y expone siempre las mismas rutas: `GET /health`, `GET /items` y `GET /items/{id}`.\n- `GET /items`\
+    \ devuelve los elementos **ordenados por `id` ascendente**, con paginación `limit`/`offset`.\n  `total`\
+    \ es la cantidad de elementos que cumplen los filtros, sin considerar la paginación.\n- Los filtros\
+    \ se combinan con AND. Los filtros de texto comparan por igualdad exacta sin distinguir mayúsculas.\n\
+    - Un parámetro inválido (tipo, rango o valor fuera del enum) responde **400**. Un `id` inexistente\
+    \ responde **404**.\n- Los errores usan siempre el formato `{ \"error\": \"<codigo>\", \"message\"\
+    : \"<detalle>\" }`.\n- Los nombres de campos del documento coinciden con los del JSON de la semilla\
+    \ (campo `id` como clave primaria).\n- Fechas en ISO 8601 UTC (`date-time`) o `YYYY-MM-DD` (`date`).\n"
+  x-collection: lineas_orden
+  x-id-prefix: LIN
+servers:
+- url: http://localhost:3000
+  description: Local
+- url: https://TU-SERVICIO.onrender.com
+  description: Render (reemplazar por tu URL)
+tags:
+- name: Servicio
+  description: Estado del servicio
+- name: lineas_orden
+  description: Líneas (renglones) de cada orden.
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Estado del servicio
+      tags:
+      - Servicio
+      description: Debe responder 200 si el servicio y su base de datos están operativos. `collection`
+        debe coincidir con la colección que sirve este microservicio.
+      responses:
+        '200':
+          description: Servicio operativo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /items:
+    get:
+      operationId: listItems
+      summary: Lista de lineas_orden
+      tags:
+      - lineas_orden
+      description: Devuelve una página de elementos de `lineas_orden` ordenados por `id`.
+      parameters:
+      - name: ordenId
+        in: query
+        required: false
+        description: Filtra por orden.
+        schema:
+          type: string
+          pattern: ^ORD[0-9]+$
+      - name: productoId
+        in: query
+        required: false
+        description: Filtra por producto.
+        schema:
+          type: string
+          pattern: ^PRD[0-9]+$
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Página de resultados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /items/{id}:
+    get:
+      operationId: getItem
+      summary: Detalle de un elemento de lineas_orden
+      tags:
+      - lineas_orden
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador del elemento (por ejemplo `LIN001`).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: El elemento solicitado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Cantidad máxima de elementos a devolver.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      required: false
+      description: Cantidad de elementos a saltear.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+  responses:
+    BadRequest:
+      description: Parámetros inválidos.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: bad_request
+            message: El parámetro limit debe estar entre 1 y 100.
+    NotFound:
+      description: No existe un elemento con ese id.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: not_found
+            message: No existe LIN999.
+  schemas:
+    Item:
+      type: object
+      description: Líneas (renglones) de cada orden.
+      required:
+      - id
+      - ordenId
+      - productoId
+      - cantidad
+      - precioUnit
+      - subtotal
+      properties:
+        id:
+          type: string
+          pattern: ^LIN[0-9]+$
+          description: Identificador único del recurso.
+          example: LIN001
+        ordenId:
+          type: string
+          pattern: ^ORD[0-9]+$
+          description: Orden a la que pertenece.
+          example: ORD001
+        productoId:
+          type: string
+          pattern: ^PRD[0-9]+$
+          description: Producto comprado.
+          example: PRD001
+        cantidad:
+          type: integer
+          description: Unidades compradas.
+          minimum: 1
+          example: 1
+        precioUnit:
+          type: number
+          description: Precio unitario al momento de la compra.
+          minimum: 0
+          example: 450000
+        subtotal:
+          type: number
+          description: cantidad × precioUnit.
+          minimum: 0
+          example: 450000
+      example:
+        id: LIN001
+        ordenId: ORD001
+        productoId: PRD001
+        cantidad: 1
+        precioUnit: 450000
+        subtotal: 450000
+    ItemList:
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        total:
+          type: integer
+          minimum: 0
+          description: Cantidad total de elementos que cumplen los filtros.
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+    Health:
+      type: object
+      required:
+      - status
+      - service
+      - collection
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+        service:
+          type: string
+          description: Nombre del servicio (libre; por ejemplo el del grupo).
+          example: grupo-03-lineas_orden
+        collection:
+          type: string
+          enum:
+          - lineas_orden
+        version:
+          type: string
+          example: 1.0.0
+    Error:
+      type: object
+      required:
+      - error
+      - message
+      properties:
+        error:
+          type: string
+          enum:
+          - bad_request
+          - not_found
+        message:
+          type: string
