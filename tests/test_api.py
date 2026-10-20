@@ -214,3 +214,11 @@ def test_mock_paginacion_y_validacion_de_parametros():
     assert page["total"] == 3
     assert [item["id"] for item in page["items"]] == ["LIN006", "LIN007"]
     assert bad.status_code == 400
+
+
+def test_cors_permite_llamadas_desde_el_navegador(client_with):
+    origin = {"Origin": "https://ms-ecommerce-dashboard.onrender.com"}
+    c = client_with(upstream_ok())
+    assert c.get("/ordenes/ORD001/detalle", headers=origin).headers["access-control-allow-origin"] == "*"
+    # también en las respuestas de error, para que el navegador pueda mostrarlas
+    assert c.get("/ordenes/123/detalle", headers=origin).headers["access-control-allow-origin"] == "*"

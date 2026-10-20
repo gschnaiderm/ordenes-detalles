@@ -12,6 +12,7 @@ from typing import Annotated
 import httpx
 from fastapi import Depends, FastAPI, Path, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -68,6 +69,10 @@ app = FastAPI(
     ),
     lifespan=lifespan,
 )
+
+# Permite que páginas de otros dominios (p. ej. el monitor del dashboard) llamen al servicio
+# desde el navegador. El servicio es público y de solo lectura.
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
 
 def get_http_client(request: Request) -> httpx.AsyncClient:
